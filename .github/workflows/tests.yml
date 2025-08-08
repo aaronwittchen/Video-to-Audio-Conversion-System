@@ -23,6 +23,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r python/requirements.txt
+          pip install pytest
 
       - name: ✅ Run Pytest
         run: |
