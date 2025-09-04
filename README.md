@@ -9,6 +9,9 @@
 ![Prometheus](https://img.shields.io/badge/monitoring-prometheus-orange)
 ![Swagger](https://img.shields.io/badge/docs-swagger-brightgreen)
 
+> [!IMPORTANT]
+> Active development in progress!
+
 This project converts uploaded video files to MP3 using a microservices architecture:
 
 - **API Gateway (Flask)**: login, upload, download
