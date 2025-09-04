@@ -1,12 +1,13 @@
 # MP4 to MP3 Conversion System
 
-![Python](https://img.shields.io/badge/python-3.9+-blue.svg)  
-![Docker](https://img.shields.io/badge/docker-ready-blue)  
-![MongoDB](https://img.shields.io/badge/database-mongodb-green)  
-![MySQL](https://img.shields.io/badge/database-mysql-orange)  
-![RabbitMQ](https://img.shields.io/badge/messaging-rabbitmq-red)  
-![Flask](https://img.shields.io/badge/framework-flask-lightgrey)  
+![Python](https://img.shields.io/badge/python-3.9+-blue.svg)
+![Docker](https://img.shields.io/badge/docker-ready-blue)
+![MongoDB](https://img.shields.io/badge/database-mongodb-green)
+![MySQL](https://img.shields.io/badge/database-mysql-orange)
+![RabbitMQ](https://img.shields.io/badge/messaging-rabbitmq-red)
+![Flask](https://img.shields.io/badge/framework-flask-lightgrey)
 ![Prometheus](https://img.shields.io/badge/monitoring-prometheus-orange)
+![Swagger](https://img.shields.io/badge/docs-swagger-brightgreen)
 
 This project converts uploaded video files to MP3 using a microservices architecture:
 
@@ -16,6 +17,8 @@ This project converts uploaded video files to MP3 using a microservices architec
 - **Notification (Worker)**: consumes MP3 jobs, notifies users
 - **RabbitMQ**: inter-service messaging
 - **MongoDB (GridFS)**: binary storage for videos and mp3s
+
+![ConverterDiagram](public/ConverterDiagram.png)
 
 ---
 
@@ -153,3 +156,5 @@ docker build -t <registry>/notification:latest python/src/notification
 
 Apply manifests per service in your cluster. Ensure DNS for `rabbitmq` and Mongo endpoints resolves inside the cluster, and that `AUTH_SVC_ADDRESS` is set to the auth service ClusterIP\:Port.
 ````
+
+Interactive API documentation is available via **Swagger UI**: `http://localhost:5000/apidocs/`
