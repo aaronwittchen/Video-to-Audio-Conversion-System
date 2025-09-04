@@ -1,4 +1,4 @@
-# MP4 to MP3 Conversion System
+# Video to Audio Conversion System
 
 ![Python](https://img.shields.io/badge/python-3.9+-blue.svg)
 ![Docker](https://img.shields.io/badge/docker-ready-blue)
@@ -7,47 +7,137 @@
 ![RabbitMQ](https://img.shields.io/badge/messaging-rabbitmq-red)
 ![Flask](https://img.shields.io/badge/framework-flask-lightgrey)
 ![Prometheus](https://img.shields.io/badge/monitoring-prometheus-orange)
-![Swagger](https://img.shields.io/badge/docs-swagger-brightgreen)
+![Kubernetes](https://img.shields.io/badge/orchestration-kubernetes-blueviolet)
+![JWT](https://img.shields.io/badge/security-jwt-yellow)
 
-This project converts uploaded video files to MP3 using a microservices architecture:
+## Overview
 
-- **API Gateway (Flask)**: login, upload, download
-- **Auth Service (Flask + MySQL)**: login and token validation
-- **Converter (Worker)**: consumes RabbitMQ jobs, writes MP3 to MongoDB
-- **Notification (Worker)**: consumes MP3 jobs, notifies users
-- **RabbitMQ**: inter-service messaging
-- **MongoDB (GridFS)**: binary storage for videos and mp3s
+A scalable microservice-based system for converting video files to MP3 format, built with Python, RabbitMQ, MongoDB, Docker, Kubernetes, and MySQL. This architecture demonstrates modern cloud-native patterns including service decoupling, message queues, and container orchestration.
+
+## Architecture
 
 ![ConverterDiagram](public/ConverterDiagram.png)
 
----
+### Core Services
 
-### High-level flow
+- **API Gateway (Flask)**: Entry point for all client requests, handles authentication, uploads, and downloads
+- **Auth Service (Flask + MySQL)**: Manages user authentication and JWT token validation
+- **Converter Service**: Processes video files asynchronously via RabbitMQ messages
+- **Notification Service**: Sends email notifications upon conversion completion
+- **RabbitMQ**: Message broker for inter-service communication
+- **MongoDB (GridFS)**: Distributed file storage for videos and MP3s
+- **Prometheus + Grafana**: Monitoring and metrics collection
 
-1. Client logs in via Gateway and gets a token from Auth.
-2. Client uploads a video to Gateway; video is stored in MongoDB GridFS and a message is queued.
-3. Converter consumes the message, produces an MP3, stores it in MongoDB, and publishes a notification message.
-4. Client downloads the MP3 via Gateway.
+## Microservice Architecture and Distributed Systems
 
----
+This project implements a robust microservice architecture to convert video files to MP3 format, utilizing:
 
-## Quick start (local, without Kubernetes)
+- **Python** for service implementation
+- **RabbitMQ** for asynchronous message queuing
+- **MongoDB** with GridFS for binary file storage
+- **Docker** for containerization
+- **Kubernetes** for orchestration
+- **MySQL** for user authentication data
 
-**Prerequisites**: Docker, Python 3.9+, MongoDB, RabbitMQ, MySQL (for auth).
+### MP4 to MP3 Conversion Flow
 
-### 1) Start infra services
+1. **Upload & Authentication**
+   - User authenticates and receives a JWT token
+   - Uploaded video is received by the API Gateway
+   - Video is stored in MongoDB GridFS
+   - A message is published to RabbitMQ for processing
 
-```bash
-docker run -d --name rabbitmq -p 5672:5672 -p 15672:15672 rabbitmq:management
-docker run -d --name mongo -p 27017:27017 mongo:6
-docker run -d --name mysql -e MYSQL_ROOT_PASSWORD=root -p 3306:3306 mysql:8
-```
+2. **Asynchronous Processing**
+   - Converter service consumes the message from the queue
+   - Video is processed and converted to MP3 format
+   - MP3 is stored back in MongoDB
+   - Completion notification is published to RabbitMQ
 
-````
+3. **Notification & Download**
+   - Notification service sends an email with download link
+   - User can download the MP3 using their JWT token
 
-### 2) Configure environment
+## Authentication & Security
 
-Set at least these variables when running services:
+### JWT Authentication Flow
+
+1. User submits credentials to `/login` endpoint
+2. Auth Service validates against MySQL database
+3. On success, a signed JWT is issued
+4. Client includes JWT in `Authorization: Bearer <token>` header for subsequent requests
+
+### JWT Structure
+- **Header**: Contains token type and signing algorithm
+- **Payload**: Contains claims (user info, permissions)
+- **Signature**: Ensures token integrity
+
+## Communication Patterns
+
+### Synchronous Communication
+- Used between Gateway and Auth Service
+- Blocking requests with immediate responses
+- Ensures strong consistency
+
+### Asynchronous Communication
+- Used for video processing via RabbitMQ
+- Non-blocking, improves scalability
+- Implements eventual consistency
+
+## Data Storage
+
+### MongoDB GridFS
+- Handles files larger than 16MB (MongoDB document limit)
+- Automatically chunks large files
+- Stores metadata and file chunks in separate collections
+
+### MySQL
+- Stores user credentials and authentication data
+- Provides ACID compliance for user management
+
+## Getting Started
+
+### Prerequisites
+- Docker and Docker Compose
+- Python 3.9+
+- Kubernetes (for production deployment)
+
+### Local Development
+
+1. Start infrastructure services:
+   ```bash
+   docker-compose up -d rabbitmq mongodb mysql
+   ```
+
+2. Set up environment variables (see `.env.example`)
+
+3. Start the services:
+   ```bash
+   # Start auth service
+   python -m src.auth.server
+   
+   # Start gateway
+   python -m src.gateway.server
+   
+   # Start converter worker
+   python -m src.converter.consumer
+   
+   # Start notification worker
+   python -m src.notification.consumer
+   ```
+
+## Monitoring
+
+- **Prometheus**: Metrics collection at `http://localhost:9090`
+- **Grafana**: Visualization at `http://localhost:3000`
+- **RabbitMQ Management**: `http://localhost:15672`
+
+## API Documentation
+
+Once services are running, access the interactive API documentation at `http://localhost:8080/docs`
+
+## License
+
+MIT
 
 ```bash
 export AUTH_SVC_ADDRESS=localhost:5000
