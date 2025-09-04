@@ -7,14 +7,36 @@ import re          # It lets you search, match, and manipulate strings using reg
 from flask import Flask, request, jsonify    # The Flask web framework for building the API.
 from flask_mysqldb import MySQL              # A Flask extension to connect to a MySQL database.
 from dotenv import load_dotenv               # Loads environment variables from a .env file, allowing for configuration without hardcoding sensitive information.
-from flasgger import Swagger                 # Swagger integration for Flask, used to document the API endpoints and their expected inputs/outputs.
 load_dotenv()                                # Loads environment variables from a .env file, allowing for configuration without hardcoding sensitive information.
 
 
 # --- App & DB Setup ---
 server = Flask(__name__)      # Initializes a Flask application instance.
-swagger = Swagger(server, template_file='../docs/swagger.yml') # Initializes Swagger for API documentation using a custom template file located at '../docs/swagger.yml'.
-mysql = MySQL(server)         # Initializes MySQL connection with the Flask app.
+
+# Only initialize Swagger if not in testing mode and flasgger is available
+try:
+    if not server.config.get('TESTING', False):
+        from flasgger import Swagger                 # Swagger integration for Flask, used to document the API endpoints and their expected inputs/outputs.
+        swagger = Swagger(server, template_file='../docs/swagger.yml') # Initializes Swagger for API documentation using a custom template file located at '../docs/swagger.yml'.
+    else:
+        swagger = None
+except ImportError:
+    # flasgger not available, skip swagger initialization
+    swagger = None
+
+# Only initialize MySQL if not in testing mode
+if not server.config.get('TESTING', False):
+    mysql = MySQL(server)
+else:
+    mysql = None
+
+def get_mysql():
+    """Get MySQL connection, initializing if needed."""
+    global mysql
+    if mysql is None:
+        from flask_mysqldb import MySQL
+        mysql = MySQL(server)
+    return mysql
 
 # --- Logging Configuration ---
 logging.basicConfig(level=logging.INFO)
@@ -93,7 +115,7 @@ def register():
             return jsonify({'message': password_error}), 400
 
         try:
-            cur = mysql.connection.cursor()  # Creates a MySQL cursor (database object used in programming to retrieve, manipulate, and navigate through rows returned by a query one at a time.) to execute database queries.
+            cur = get_mysql().connection.cursor()  # Creates a MySQL cursor (database object used in programming to retrieve, manipulate, and navigate through rows returned by a query one at a time.) to execute database queries.
 
             # Check if user already exists
             cur.execute("SELECT id FROM users WHERE email = %s", (email,))  # The query uses a parameterized statement (%s) to prevent SQL injection.
@@ -106,7 +128,7 @@ def register():
                 "INSERT INTO users (email, password, created_at) VALUES (%s, %s, NOW())",
                 (email, hashed_password)
             )
-            mysql.connection.commit()  # Saves the changes made by the INSERT query to the database.
+            get_mysql().connection.commit()  # Saves the changes made by the INSERT query to the database.
 
             logger.info(f"New user registered: {email}")
             return jsonify({'message': 'User registered successfully'}), 201
@@ -133,7 +155,7 @@ def login():
         return jsonify({'message': 'Could not verify'}), 401
 
     try:
-        cur = mysql.connection.cursor()
+        cur = get_mysql().connection.cursor()
         
         # Query user from database
         result = cur.execute(

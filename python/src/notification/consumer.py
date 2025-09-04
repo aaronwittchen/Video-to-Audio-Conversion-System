@@ -1,30 +1,20 @@
 import pika, sys, os, time
-from pymongo import MongoClient
-import gridfs
-from convert import to_mp3
+from send import email
 from prometheus_client import Counter, Histogram, start_http_server
 
-
-JOBS_TOTAL = Counter("converter_jobs_total", "Jobs processed", ["result"])
-JOB_DURATION = Histogram("converter_job_duration_seconds", "Job processing time")
+JOBS_TOTAL = Counter("notification_jobs_total", "Jobs processed", ["result"])
+JOB_DURATION = Histogram("notification_job_duration_seconds", "Job processing time")
 
 
 def main():
     start_http_server(int(os.environ.get("METRICS_PORT", "9100")))
-    client = MongoClient("host.minikube.internal", 27017)
-    db_videos = client.videos
-    db_mp3s = client.mp3s
-    # gridfs
-    fs_videos = gridfs.GridFS(db_videos)
-    fs_mp3s = gridfs.GridFS(db_mp3s)
-
     # rabbitmq connection
     connection = pika.BlockingConnection(pika.ConnectionParameters(host="rabbitmq"))
     channel = connection.channel()
 
     def callback(ch, method, properties, body):
         start = time.time()
-        err = to_mp3.start(body, fs_videos, fs_mp3s, ch)
+        err = email.notification(body)
         duration = time.time() - start
         JOB_DURATION.observe(duration)
         if err:
@@ -35,12 +25,13 @@ def main():
             ch.basic_ack(delivery_tag=method.delivery_tag)
 
     channel.basic_consume(
-        queue=os.environ.get("VIDEO_QUEUE"), on_message_callback=callback
+        queue=os.environ.get("MP3_QUEUE"), on_message_callback=callback
     )
 
     print("Waiting for messages. To exit press CTRL+C")
 
     channel.start_consuming()
+
 
 if __name__ == "__main__":
     try:
