@@ -7,14 +7,19 @@
 ![RabbitMQ](https://img.shields.io/badge/messaging-rabbitmq-red)
 ![Flask](https://img.shields.io/badge/framework-flask-lightgrey)
 ![Prometheus](https://img.shields.io/badge/monitoring-prometheus-orange)
-![Kubernetes](https://img.shields.io/badge/orchestration-kubernetes-blueviolet)
-![JWT](https://img.shields.io/badge/security-jwt-yellow)
+![Swagger](https://img.shields.io/badge/docs-swagger-brightgreen)
 
-## Overview
+This project converts uploaded video files to MP3 using a microservices architecture:
 
-A scalable microservice-based system for converting video files to MP3 format, built with Python, RabbitMQ, MongoDB, Docker, Kubernetes, and MySQL. This architecture demonstrates modern cloud-native patterns including service decoupling, message queues, and container orchestration.
+> [!IMPORTANT]
+> Active development in progress!
 
-## Architecture
+- **API Gateway (Flask)**: login, upload, download
+- **Auth Service (Flask + MySQL)**: login and token validation
+- **Converter (Worker)**: consumes RabbitMQ jobs, writes MP3 to MongoDB
+- **Notification (Worker)**: consumes MP3 jobs, notifies users
+- **RabbitMQ**: inter-service messaging
+- **MongoDB (GridFS)**: binary storage for videos and mp3s
 
 ![ConverterDiagram](public/ConverterDiagram.png)
 
