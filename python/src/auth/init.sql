@@ -1,6 +1,6 @@
 CREATE DATABASE IF NOT EXISTS auth_db
--- Ensures the database supports full Unicode, including emojis and many non-Latin scripts.
--- MySQL’s older utf8 only supports up to 3-byte characters, so it actually cannot store some Unicode characters (like emoji, some Chinese/Japanese characters, etc.).
+-- Ensures the database supports full Unicode characters
+-- MySQL’s older utf8 only supports up to 3-byte characters, so it actually cannot store certain Unicode characters (like emoji, some Chinese/Japanese characters, etc.)
     CHARACTER SET utf8mb4
     COLLATE utf8mb4_unicode_ci;
 

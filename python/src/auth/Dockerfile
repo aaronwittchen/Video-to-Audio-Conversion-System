@@ -1,8 +1,7 @@
-# Use an official lightweight Python image based on Debian Bullseye
+# Official lightweight Python image based on Debian Bullseye
 FROM python:3.10-slim-bullseye
 
-# Install system dependencies required for building Python packages
-# and for MySQL/MariaDB client support
+# Install system dependencies
 RUN apt-get update && \
     apt-get install -y --no-install-recommends --no-install-suggests \
         build-essential \

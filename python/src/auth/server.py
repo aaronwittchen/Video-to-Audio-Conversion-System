@@ -3,15 +3,20 @@ import jwt
 import bcrypt
 import datetime
 import logging
-import re          # Provides regular expression matching operations for validating email formats and password strength.
-from flask import Flask, request, jsonify
+import re # For regex password validation
+from flask import Flask, request
 from flask_mysqldb import MySQL
 from dotenv import load_dotenv
+from flasgger import Swagger
+from response_utils import (
+    success_response, validation_error, 
+    unauthorized_error, conflict_error, server_error, created_response
+) # Standardize the API responses
+
 load_dotenv()
 
-
 # App Setup
-server = Flask(__name__)    # Initializes a Flask application instance.
+server = Flask(__name__)
 
 # Configuration
 server.config['MYSQL_HOST'] = os.environ.get('MYSQL_HOST', 'localhost')
@@ -20,17 +25,22 @@ server.config['MYSQL_PASSWORD'] = os.environ.get('MYSQL_PASSWORD', '')
 server.config['MYSQL_DB'] = os.environ.get('MYSQL_DB', 'auth_db')
 server.config['MYSQL_PORT'] = int(os.environ.get('MYSQL_PORT', 3306))
 
-
 # Only initialize Swagger if not in testing mode and flasgger is available
+swagger = None
+
 try:
     if not server.config.get('TESTING', False):
-        from flasgger import Swagger
-        swagger = Swagger(server, template_file='../docs/swagger.yml')
-    else:
-        swagger = None
+        template_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'docs', 'swagger.yaml')
+        swagger = Swagger(server, template_file=template_path)
 except ImportError:
-    # flasgger not available, skip swagger initialization
-    swagger = None
+    pass
+except Exception as e:
+    print(f"Swagger initialization failed: {e}")
+
+if swagger:
+    print("Swagger UI available at: http://localhost:5000/apidocs/")
+else:
+    print("Swagger UI not available")
 
 # Only initialize MySQL if not in testing mode
 if not server.config.get('TESTING', False):
@@ -47,16 +57,22 @@ def get_mysql():
 
 # Logging Configuration
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)  # logger: A logger instance specific to this module (__name__) for logging events
+logger = logging.getLogger(__name__)
+
+# Ensure JWT_SECRET is set at startup
+JWT_SECRET = os.environ.get("JWT_SECRET")
+if not JWT_SECRET:
+    logger.error("JWT_SECRET environment variable is missing")
+    exit(1)
 
 # Helper Functions
 def hash_password(password):
     """Hash a password using bcrypt."""
-    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')  # Converts the password to bytes, Generates a random salt using, Hashes the password with the salt, Converts the hashed password back to a string
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
 def verify_password(password, hashed):
     """Verify a password against a bcrypt hash."""
-    return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))  # Verifies a provided password against a stored bcrypt hash.
+    return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
 
 def create_jwt(username, secret, is_admin):
     """Generate a JWT token."""
@@ -64,8 +80,8 @@ def create_jwt(username, secret, is_admin):
     return jwt.encode(
         {
             "username": username,
-            "exp": now + datetime.timedelta(days=1),  # Expiration time (current time + 1 day).
-            "iat": now,                               # Issued-at time (current UTC time).
+            "exp": now + datetime.timedelta(days=1),
+            "iat": now,
             "admin": is_admin
         },
         secret,
@@ -86,33 +102,37 @@ def validate_password_strength(password):
         if not re.search(pattern, password):
             return f'Password must contain {message}'
     
-    return None  # All validations passed
+    return None
 
-# --- Routes ---
+# Global Exception Handler
+@server.errorhandler(Exception)
+def handle_exception(e):
+    logger.error(f"Unhandled exception: {str(e)}", exc_info=True)
+    return server_error()
+
+# Routes
 @server.route('/register', methods=['POST'])
 def register():
+    data = request.get_json()
+
+    if not data or 'email' not in data or 'password' not in data:
+        return validation_error('Email and password are required')
+
+    email = data['email']
+    password = data['password']
+
+    if not re.match(r"[^@]+@[^@]+\.[^@]+", email):
+        return validation_error('Invalid email format')
+
+    password_error = validate_password_strength(password)
+    if password_error:
+        return validation_error(password_error)
+
     try:
-        data = request.get_json()
-
-        if not data or 'email' not in data or 'password' not in data:
-            return jsonify({'message': 'Email and password are required'}), 400
-
-        email = data['email']
-        password = data['password']
-
-        if not re.match(r"[^@]+@[^@]+\.[^@]+", email):
-            return jsonify({'message': 'Invalid email format'}), 400
-
-        password_error = validate_password_strength(password)
-        if password_error:
-            return jsonify({'message': password_error}), 400
-
-        try:
-            cur = get_mysql().connection.cursor()
-
+        with get_mysql().connection.cursor() as cur:
             cur.execute("SELECT id FROM users WHERE email = %s", (email,))
             if cur.fetchone():
-                return jsonify({'message': 'User already exists'}), 409
+                return conflict_error('User already exists')
 
             hashed_password = hash_password(password)
             cur.execute(
@@ -122,101 +142,73 @@ def register():
             get_mysql().connection.commit()
 
             logger.info(f"New user registered: {email}")
-            return jsonify({'message': 'User registered successfully'}), 201
-
-        except Exception as db_error:
-            logger.error(f"Database error during registration: {str(db_error)}")
-            return jsonify({'message': 'Database error'}), 500
-        finally:
-            if 'cur' in locals():
-                cur.close()
-
-    except Exception as e:
-        logger.error(f"Error during registration: {str(e)}")
-        return jsonify({'message': 'Internal server error'}), 500
+            return created_response('User registered successfully')
+    
+    except Exception as db_error:
+        logger.error(f"Database error during registration: {str(db_error)}")
+        return server_error('Registration failed')
 
 @server.route('/login', methods=['POST'])
 def login():
     auth = request.authorization
     if not auth or not auth.username or not auth.password:
         logger.warning("Login attempt with missing credentials")
-        return jsonify({'message': 'Could not verify'}), 401
+        return unauthorized_error('Could not verify')
 
     try:
-        cur = get_mysql().connection.cursor()
-        result = cur.execute(
-            "SELECT email, password FROM users WHERE email = %s", (auth.username,)
-        )
+        # Database connection to execute SQL queries
+        with get_mysql().connection.cursor() as cur:
+            cur.execute(
+                "SELECT email, password FROM users WHERE email = %s", (auth.username,)
+            )
+            row = cur.fetchone() # Returns a tuple for MySQL, or sqlite3.Row for SQLite
 
-        if result == 0:  # No user found
-            logger.warning(f"Login attempt for unknown user: {auth.username}")
-            return jsonify({'message': 'Could not verify'}), 401
+            if not row:
+                logger.warning(f"Login attempt for unknown user: {auth.username}")
+                return unauthorized_error('Could not verify')
 
-        email, stored_password = cur.fetchone()
+            # If row is a tuple (MySQL), unpack directly
+            # If row is a dict-like object (sqlite3.Row), extract fields
+            email, stored_password = row if isinstance(row, tuple) else (row['email'], row['password'])
 
-        # Verify credentials
-        if auth.username != email or not verify_password(auth.password, stored_password):
-            logger.warning(f"Failed login for user: {auth.username}")
-            return jsonify({'message': 'Could not verify'}), 401
+            if auth.username != email or not verify_password(auth.password, stored_password):
+                logger.warning(f"Failed login for user: {auth.username}")
+                return unauthorized_error('Could not verify')
 
-        jwt_secret = os.environ.get("JWT_SECRET")
-        if not jwt_secret:
-            logger.error("JWT_SECRET not set in environment")
-            return jsonify({'message': 'Server config error'}), 500
-        
-        token = create_jwt(auth.username, jwt_secret, is_admin=True)  # TODO: Improve is_admin logic
-        logger.info(f"Successful login for user: {auth.username}")
-        return jsonify({'token': token}), 200
+            token = create_jwt(auth.username, JWT_SECRET, is_admin=True)
+            logger.info(f"Successful login for user: {auth.username}")
+            return success_response(data={'token': token})
 
-    except Exception as e:
-        logger.error(f"Error during login: {str(e)}")
-        return jsonify({'message': 'Internal server error'}), 500
-    finally:
-        if 'cur' in locals():
-            cur.close()
+    except Exception as db_error:
+        logger.error(f"Database error during login: {str(db_error)}")
+        return server_error('Authentication failed')
 
 @server.route('/validate', methods=['POST'])
-# TODO: Validate that the token is a Bearer token
 def validate():
     auth_header = request.headers.get('Authorization')
     if not auth_header:
-        return jsonify({'message': 'Authorization header missing'}), 401
+        return unauthorized_error('Authorization header missing')
+
+    if not auth_header.startswith("Bearer "):
+        return unauthorized_error('Invalid auth header format')
 
     try:
         token = auth_header.split(" ")[1]
-    except IndexError:
-        return jsonify({'message': 'Invalid auth header format'}), 401
-
-    try:
-        jwt_secret = os.environ.get("JWT_SECRET")
-        if not jwt_secret:
-            logger.error("JWT_SECRET not set")
-            return jsonify({'message': 'Server config error'}), 500
-
-        decoded = jwt.decode(token, jwt_secret, algorithms=["HS256"])
-        logger.info(f"Token validated for users: {decoded.get('username')}")
-        return jsonify(decoded), 200
-
+        decoded = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+        logger.info(f"Token validated for user: {decoded.get('username')}")
+        return success_response(data=decoded)
+    
     except jwt.ExpiredSignatureError:
         logger.warning("Expired token used")
-        return jsonify({'message': 'Token expired'}), 401
+        return unauthorized_error('Token expired')
     except jwt.InvalidTokenError:
         logger.warning("Invalid token used")
-        return jsonify({'message': 'Invalid token'}), 401
-    except Exception as e:
-        logger.error(f"Unexpected error during validation: {str(e)}")
-        return jsonify({'message': 'Token validation failed'}), 401
+        return unauthorized_error('Invalid token')
 
 @server.route('/health', methods=['GET'])
 def health():
-    return jsonify({'status': 'healthy'}), 200
+    return success_response(data={'status': 'healthy'})
 
 if __name__ == '__main__':
-    required_env_vars = ['JWT_SECRET']
-    missing = [var for var in required_env_vars if not os.environ.get(var)]
-    if missing:
-        logger.error(f"Missing required env vars: {missing}")
-        exit(1)
-
     logger.info("Starting authentication server...")
     server.run(host='0.0.0.0', port=5000, debug=False)
