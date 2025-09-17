@@ -36,3 +36,7 @@ def server_error(message="Internal server error"):
 def created_response(message, data=None):
     """Return a 201 created response."""
     return success_response(message, data, 201)
+
+def too_many_requests_error(message="Rate limit exceeded. Try again later."):
+    """Return a 429 too many requests error."""
+    return error_response(message, 429)

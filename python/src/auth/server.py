@@ -8,10 +8,10 @@ from flask import Flask, request
 from flask_mysqldb import MySQL
 from dotenv import load_dotenv
 from flasgger import Swagger
-from response_utils import (
-    success_response, validation_error, 
-    unauthorized_error, conflict_error, server_error, created_response
-) # Standardize the API responses
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from flask_limiter.errors import RateLimitExceeded
+from response_utils import (success_response, validation_error, unauthorized_error, conflict_error, server_error, created_response, too_many_requests_error) # Standardize the API responses
 
 load_dotenv()
 
@@ -65,6 +65,14 @@ if not JWT_SECRET:
     logger.error("JWT_SECRET environment variable is missing")
     exit(1)
 
+# Rate Limiter
+limiter = Limiter(
+    key_func=get_remote_address,
+    default_limits=["200 per day", "50 per hour"]
+)
+
+limiter.init_app(server)
+
 # Helper Functions
 def hash_password(password):
     """Hash a password using bcrypt."""
@@ -104,6 +112,10 @@ def validate_password_strength(password):
     
     return None
 
+@server.errorhandler(RateLimitExceeded)
+def handle_rate_limit_exceeded(e):
+    return too_many_requests_error()
+
 # Global Exception Handler
 @server.errorhandler(Exception)
 def handle_exception(e):
@@ -112,6 +124,7 @@ def handle_exception(e):
 
 # Routes
 @server.route('/register', methods=['POST'])
+@limiter.limit("5 per minute")
 def register():
     data = request.get_json()
 
@@ -149,6 +162,7 @@ def register():
         return server_error('Registration failed')
 
 @server.route('/login', methods=['POST'])
+@limiter.limit("5 per minute")
 def login():
     auth = request.authorization
     if not auth or not auth.username or not auth.password:
@@ -184,6 +198,7 @@ def login():
         return server_error('Authentication failed')
 
 @server.route('/validate', methods=['POST'])
+@limiter.limit("30 per minute")
 def validate():
     auth_header = request.headers.get('Authorization')
     if not auth_header:
@@ -206,6 +221,7 @@ def validate():
         return unauthorized_error('Invalid token')
 
 @server.route('/health', methods=['GET'])
+@limiter.limit("5 per minute")
 def health():
     return success_response(data={'status': 'healthy'})
 
