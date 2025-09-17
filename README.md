@@ -47,12 +47,14 @@ This project implements a robust microservice architecture to convert video file
 ### MP4 to MP3 Conversion Flow
 
 1. **Upload & Authentication**
+
    - User authenticates and receives a JWT token
    - Uploaded video is received by the API Gateway
    - Video is stored in MongoDB GridFS
    - A message is published to RabbitMQ for processing
 
 2. **Asynchronous Processing**
+
    - Converter service consumes the message from the queue
    - Video is processed and converted to MP3 format
    - MP3 is stored back in MongoDB
@@ -72,6 +74,7 @@ This project implements a robust microservice architecture to convert video file
 4. Client includes JWT in `Authorization: Bearer <token>` header for subsequent requests
 
 ### JWT Structure
+
 - **Header**: Contains token type and signing algorithm
 - **Payload**: Contains claims (user info, permissions)
 - **Signature**: Ensures token integrity
@@ -79,11 +82,13 @@ This project implements a robust microservice architecture to convert video file
 ## Communication Patterns
 
 ### Synchronous Communication
+
 - Used between Gateway and Auth Service
 - Blocking requests with immediate responses
 - Ensures strong consistency
 
 ### Asynchronous Communication
+
 - Used for video processing via RabbitMQ
 - Non-blocking, improves scalability
 - Implements eventual consistency
@@ -91,17 +96,20 @@ This project implements a robust microservice architecture to convert video file
 ## Data Storage
 
 ### MongoDB GridFS
+
 - Handles files larger than 16MB (MongoDB document limit)
 - Automatically chunks large files
 - Stores metadata and file chunks in separate collections
 
 ### MySQL
+
 - Stores user credentials and authentication data
 - Provides ACID compliance for user management
 
 ## Getting Started
 
 ### Prerequisites
+
 - Docker and Docker Compose
 - Python 3.9+
 - Kubernetes (for production deployment)
@@ -109,6 +117,7 @@ This project implements a robust microservice architecture to convert video file
 ### Local Development
 
 1. Start infrastructure services:
+
    ```bash
    docker-compose up -d rabbitmq mongodb mysql
    ```
@@ -116,16 +125,17 @@ This project implements a robust microservice architecture to convert video file
 2. Set up environment variables (see `.env.example`)
 
 3. Start the services:
+
    ```bash
    # Start auth service
    python -m src.auth.server
-   
+
    # Start gateway
    python -m src.gateway.server
-   
+
    # Start converter worker
    python -m src.converter.consumer
-   
+
    # Start notification worker
    python -m src.notification.consumer
    ```
@@ -250,6 +260,9 @@ docker build -t <registry>/notification:latest python/src/notification
 ```
 
 Apply manifests per service in your cluster. Ensure DNS for `rabbitmq` and Mongo endpoints resolves inside the cluster, and that `AUTH_SVC_ADDRESS` is set to the auth service ClusterIP\:Port.
-````
+
+```
 
 Interactive API documentation is available via **Swagger UI**: `http://localhost:5000/apidocs/`
+
+```
