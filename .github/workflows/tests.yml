@@ -1,13 +1,17 @@
-name: Tests
+name: Auth Service Tests
 
 on:
   push:
-    branches: [main]
+    paths:
+      - 'python/src/auth/**'
+      - '.github/workflows/tests.yml'
   pull_request:
-    branches: [main]
+    paths:
+      - 'python/src/auth/**'
+      - '.github/workflows/tests.yml'
 
 jobs:
-  test:
+  test-auth:
     runs-on: ubuntu-latest
 
     steps:
@@ -19,22 +23,17 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Cache dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-
       - name: Install dependencies
+        working-directory: ./python/src/auth
         run: |
           python -m pip install --upgrade pip
-          pip install -r python/requirements.txt
-          pip install pytest
+          pip install -r requirements.txt
+          pip install pytest pytest-cov
 
-      - name: Run Pytest
+      - name: Run tests
+        working-directory: ./python/src/auth
         env:
-          PYTHONPATH: ${{ github.workspace }}/python/src
+          TESTING: 'true'
+          JWT_SECRET: 'testsecret'
         run: |
-          pytest -v python/src/auth/testing
+          python -m pytest tests/ -v --cov=.
