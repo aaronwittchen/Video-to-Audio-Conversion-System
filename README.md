@@ -21,7 +21,7 @@ This project converts uploaded video files to MP3 using a microservices architec
 - **RabbitMQ**: inter-service messaging
 - **MongoDB (GridFS)**: binary storage for videos and mp3s
 
-![ConverterDiagram](public/ConverterDiagram.png)
+![ConverterDiagram](images/ConverterDiagram.png)
 
 ### Core Services
 
